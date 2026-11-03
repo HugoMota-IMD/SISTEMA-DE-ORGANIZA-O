@@ -1,0 +1,31 @@
+# Preparation only. Do not apply before the final account/repository approval.
+# Set the region after confirming the EXISTING Neon project's region.
+services:
+  - type: web
+    name: organiza-piloto
+    runtime: python
+    plan: free
+    numInstances: 1
+    autoDeployTrigger: 'off'
+    buildCommand: bash build.sh
+    startCommand: bash start-render.sh
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.14.6
+      - key: APP_ENVIRONMENT
+        value: production
+      - key: APP_LOCAL_MODE
+        value: 'false'
+      - key: APP_DEBUG
+        value: 'false'
+      - key: APP_REGISTRATION_MODE
+        value: approval
+      - key: APP_READ_ONLY
+        value: 'true'
+      - key: APP_SECRET_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_URL_UNPOOLED
+        sync: false

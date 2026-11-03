@@ -1,0 +1,222 @@
+# INACTIVE TEMPLATE. Outside .github/workflows; nothing is scheduled or uploaded.
+# Copy/enable only after approval of the exact private repo, Neon DB, Drive
+# account/folder, OAuth app, free quotas and a successful external restore drill.
+name: Organiza encrypted PostgreSQL backup
+
+on:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: '0 7 * * *' # 03:00 America/Manaus; uncomment only after approval.
+
+permissions:
+  contents: read
+
+concurrency:
+  group: organiza-encrypted-postgres-backup
+  cancel-in-progress: false
+
+jobs:
+  encrypted-backup:
+    if: >-
+      vars.ORGANIZA_BACKUPS_APPROVED == 'true' &&
+      vars.BACKUP_DRIVE_CONFIRMED == 'true' &&
+      vars.BACKUP_FREE_QUOTA_CONFIRMED == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+      AGE_RECIPIENT: ${{ vars.AGE_RECIPIENT }}
+      DRIVE_ACCOUNT_EMAIL: ${{ vars.DRIVE_ACCOUNT_EMAIL }}
+      DRIVE_BACKUP_FOLDER_ID: ${{ vars.DRIVE_BACKUP_FOLDER_ID }}
+      NEON_DIRECT_HOST: ${{ vars.NEON_DIRECT_HOST }}
+      NEON_DATABASE_NAME: ${{ vars.NEON_DATABASE_NAME }}
+      NEON_SERVER_MAJOR: ${{ vars.NEON_SERVER_MAJOR }}
+      PG_BIN_DIR: /usr/lib/postgresql/18/bin
+      PYTHONUNBUFFERED: '1'
+
+    steps:
+      - name: Checkout only the approved source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1, official API checked 2026-10-29
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0, official API checked 2026-10-29
+        with:
+          python-version: '3.12'
+
+      - name: Install signed distribution tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ca-certificates curl
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl --fail --silent --show-error \
+            --output /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          printf '%s\n' \
+            'Types: deb' \
+            'URIs: https://apt.postgresql.org/pub/repos/apt' \
+            'Suites: noble-pgdg' \
+            'Architectures: amd64' \
+            'Components: main' \
+            'Signed-By: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc' \
+            | sudo tee /etc/apt/sources.list.d/organiza-pgdg.sources >/dev/null
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-client-18 age rclone
+          python -m pip install --disable-pip-version-check 'psycopg[binary]==3.3.6'
+
+      - name: Validate destinations and write only a temporary OAuth config
+        env:
+          RCLONE_CONFIG_CONTENTS: ${{ secrets.RCLONE_CONFIG }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import configparser, json, os, re, sys, tempfile, urllib.parse, urllib.request
+          from pathlib import Path
+          from tools.postgres_common import direct_url
+          try:
+              if os.environ.get('DRIVE_ACCOUNT_EMAIL', '').lower() != 'operator@example.invalid':
+                  raise ValueError('unapproved Drive account')
+              folder = os.environ.get('DRIVE_BACKUP_FOLDER_ID', '')
+              if not re.fullmatch(r'[A-Za-z0-9_-]{10,128}', folder):
+                  raise ValueError('exact approved folder ID required')
+              if not os.environ.get('AGE_RECIPIENT', '').startswith('age1'):
+                  raise ValueError('public age recipient required')
+              parsed = urllib.parse.urlsplit(direct_url())
+              if (not os.environ.get('NEON_DIRECT_HOST') or
+                  parsed.hostname != os.environ['NEON_DIRECT_HOST'] or
+                  not os.environ.get('NEON_DATABASE_NAME') or
+                  urllib.parse.unquote(parsed.path[1:]) != os.environ['NEON_DATABASE_NAME']):
+                  raise ValueError('database destination not confirmed')
+              import psycopg
+              with psycopg.connect(direct_url(), connect_timeout=10) as database:
+                  version = int(database.execute('SHOW server_version_num').fetchone()[0]) // 10000
+              # This template pins client 18. Confirm the server first; if it is
+              # 17, change both the client pin and this check, then repeat restore.
+              if str(version) != os.environ.get('NEON_SERVER_MAJOR') or version != 18:
+                  raise ValueError('align client/server major and repeat restore rehearsal')
+              config = configparser.ConfigParser(interpolation=None)
+              config.read_string(os.environ.get('RCLONE_CONFIG_CONTENTS', ''))
+              if config.sections() != ['organiza_backup']:
+                  raise ValueError('only the dedicated approved remote belongs in this secret')
+              remote = config['organiza_backup']
+              if remote.get('type') != 'drive' or not remote.get('client_id') or not remote.get('client_secret'):
+                  raise ValueError('approved dedicated Drive OAuth application required')
+              if remote.get('service_account_file') or remote.get('service_account_credentials'):
+                  raise ValueError('this template expects the approved user OAuth identity')
+              token = json.loads(remote.get('token', '{}'))
+              if not token.get('refresh_token'):
+                  raise ValueError('refresh credential required for independent scheduled runs')
+              refresh = urllib.parse.urlencode({
+                  'client_id': remote['client_id'], 'client_secret': remote['client_secret'],
+                  'refresh_token': token['refresh_token'], 'grant_type': 'refresh_token',
+              }).encode()
+              request = urllib.request.Request('https://oauth2.googleapis.com/token', data=refresh)
+              with urllib.request.urlopen(request, timeout=20) as response:
+                  fresh = json.load(response)
+              access = fresh['access_token']
+              def drive_get(path, fields):
+                  url = 'https://www.googleapis.com/drive/v3/' + path + '?' + urllib.parse.urlencode({
+                      'fields': fields, 'supportsAllDrives': 'true',
+                  })
+                  request = urllib.request.Request(url, headers={'Authorization': 'Bearer ' + access})
+                  with urllib.request.urlopen(request, timeout=20) as response:
+                      return json.load(response)
+              # Read-only checks; do not print the token, profile or folder data.
+              about_request = urllib.request.Request(
+                  'https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)',
+                  headers={'Authorization': 'Bearer ' + access})
+              with urllib.request.urlopen(about_request, timeout=20) as response:
+                  profile = json.load(response)
+              if profile.get('user', {}).get('emailAddress', '').lower() != 'operator@example.invalid':
+                  raise ValueError('OAuth identity differs from approved account')
+              destination = drive_get('files/' + folder, 'id,mimeType,trashed,capabilities(canAddChildren)')
+              if (destination.get('id') != folder or destination.get('mimeType') != 'application/vnd.google-apps.folder'
+                  or destination.get('trashed') or not destination.get('capabilities', {}).get('canAddChildren')):
+                  raise ValueError('approved folder is inaccessible or not writable')
+              # rclone will handle future refreshes; no credentials go to outputs.
+              remote['root_folder_id'] = folder
+              temporary_root = Path(os.environ['RUNNER_TEMP']).resolve()
+              descriptor, filename = tempfile.mkstemp(prefix='organiza-rclone-', suffix='.conf', dir=temporary_root)
+              config_path = Path(filename).resolve()
+              if not config_path.is_relative_to(temporary_root):
+                  raise ValueError('invalid temporary config path')
+              os.fchmod(descriptor, 0o600)
+              with os.fdopen(descriptor, 'w', encoding='utf-8') as stream:
+                  config.write(stream)
+              with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as stream:
+                  stream.write('RCLONE_CONFIG=' + str(config_path) + '\n')
+              print('Approved database, Drive identity and exact folder verified; no upload performed yet.')
+          except Exception:
+              print('Destination preflight failed. Secrets and personal metadata were omitted; no backup upload was performed.', file=sys.stderr)
+              raise SystemExit(1)
+          PY
+
+      - name: Create the encrypted backup
+        shell: bash
+        run: |
+          set -euo pipefail
+          stamp=$(date -u +%Y%m%dT%H%M%SZ)
+          output="backups/organiza-${stamp}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.dump.age"
+          python tools/postgres_backup.py backup --output "$output"
+          printf 'ORGANIZA_ENCRYPTED_BACKUP=%s\n' "$output" >> "$GITHUB_ENV"
+
+      - name: Upload only ciphertext and its non-sensitive integrity manifest
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, subprocess, sys
+          from pathlib import Path
+          try:
+              workspace = Path(os.environ['GITHUB_WORKSPACE']).resolve()
+              encrypted = (workspace / os.environ['ORGANIZA_ENCRYPTED_BACKUP']).resolve()
+              if not encrypted.is_relative_to(workspace / 'backups') or not encrypted.name.endswith('.dump.age'):
+                  raise ValueError('only the generated encrypted backup may leave the runner')
+              manifest = encrypted.with_name(encrypted.name + '.json')
+              metadata = json.loads(manifest.read_text(encoding='utf-8'))
+              with encrypted.open('rb') as stream:
+                  prefix = b'age-encryption.org/v1\n'
+                  if stream.read(len(prefix)) != prefix:
+                      raise ValueError('expected binary age ciphertext')
+                  stream.seek(0)
+                  checksum = hashlib.file_digest(stream, 'sha256').hexdigest()
+              if metadata.get('format') != 'postgres-custom+age' or metadata.get('encrypted_sha256') != checksum:
+                  raise ValueError('ciphertext integrity mismatch')
+              folder = os.environ['DRIVE_BACKUP_FOLDER_ID']
+              common = ['--config', os.environ['RCLONE_CONFIG'], '--drive-root-folder-id', folder,
+                        '--retries', '3', '--low-level-retries', '3']
+              transfer_env = dict(os.environ)
+              for key in ('DATABASE_URL', 'DATABASE_URL_UNPOOLED', 'APP_SECRET_KEY', 'RCLONE_CONFIG_CONTENTS'):
+                  transfer_env.pop(key, None)
+              for path in (encrypted, manifest):
+                  result = subprocess.run(['rclone', 'copyto', str(path), 'organiza_backup:' + path.name,
+                                           '--immutable', '--checksum', *common], env=transfer_env, capture_output=True, timeout=180)
+                  if result.returncode:
+                      raise ValueError('ciphertext upload did not finish')
+              result = subprocess.run(['rclone', 'check', str(encrypted.parent), 'organiza_backup:',
+                                       '--one-way', '--checksum', '--include', '/' + encrypted.name,
+                                       '--include', '/' + manifest.name, *common], env=transfer_env, capture_output=True, timeout=180)
+              if result.returncode:
+                  raise ValueError('remote ciphertext verification failed')
+              print('Encrypted backup and integrity manifest uploaded and checked. No plaintext or identity key was uploaded.')
+          except Exception:
+              print('Backup transfer failed; sensitive CLI output was omitted. No remote deletion or cleanup was attempted.', file=sys.stderr)
+              raise SystemExit(1)
+          PY
+
+      - name: Remove only this job's temporary OAuth file
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          value = os.environ.get('RCLONE_CONFIG')
+          if value:
+              path = Path(value).resolve()
+              root = Path(os.environ['RUNNER_TEMP']).resolve()
+              if path.is_relative_to(root) and path.name.startswith('organiza-rclone-'):
+                  path.unlink(missing_ok=True)
+          PY

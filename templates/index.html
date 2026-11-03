@@ -1,0 +1,22 @@
+{% load static %}
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#163e36">
+  <meta name="description" content="Organize suas contas, acompanhe seus compromissos e planeje o futuro financeiro em um só lugar.">
+  <title>Organiza — Sua vida financeira, com clareza</title>
+  <link rel="icon" type="image/svg+xml" href="{% static 'icon.svg' %}">
+  <link rel="manifest" href="{% static 'manifest.webmanifest' %}">
+  <link rel="stylesheet" href="{% static 'app.css' %}">
+  <script src="{% static 'app.js' %}" defer></script>
+</head>
+<body>
+  <a href="#main" class="skip-link">Pular para o conteúdo</a>
+  <div id="app"><div class="boot"><span class="brand-mark">o<span>•</span></span><p>Preparando seu espaço…</p></div></div>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <dialog id="modal" aria-labelledby="modal-title"><div id="modal-content"></div></dialog>
+  <noscript><p class="noscript">Ative o JavaScript para usar o Organiza. Seus dados financeiros ficam no servidor.</p></noscript>
+</body>
+</html>
