@@ -25,7 +25,9 @@ def main():
     assert service['autoDeployTrigger'] == 'off' and service['healthCheckPath'] == '/api/health'
     assert 'preDeployCommand' not in service and 'disk' not in service
     variables = {item['key']: item for item in service['envVars']}
-    for name in ['DATABASE_URL', 'DATABASE_URL_UNPOOLED', 'APP_SECRET_KEY']:
+    assert service['region'] == 'virginia' and service['branch'] == 'main'
+    assert 'DATABASE_URL_UNPOOLED' not in variables
+    for name in ['DATABASE_URL', 'APP_SECRET_KEY']:
         assert variables[name]['sync'] is False and 'value' not in variables[name]
     assert variables['APP_READ_ONLY']['value'] == 'true'
     assert variables['APP_REGISTRATION_MODE']['value'] == 'approval'
@@ -87,6 +89,23 @@ print(json.dumps({'health_no_database':True,'hashed_static_files':True,'read_onl
     assert conf['workers'] == 1 and conf['threads'] == 2 and conf['accesslog'] is None
     assert conf['bind'].startswith('0.0.0.0:')
     checks.append('linux_shell_syntax_and_gunicorn_configuration')
+    # Exercise the real start script up to its failure boundary. A broken app
+    # URL or registration setting must stop it before schema changes or WSGI.
+    start_env = dict(env, PATH=str(Path(sys.executable).parent) + os.pathsep + os.environ['PATH'],
+                     DATABASE_URL_UNPOOLED=env['DATABASE_URL'])
+    for changes, message in [
+            ({'DATABASE_URL': ''}, 'DATABASE_URL'),
+            ({'DATABASE_URL': 'sqlite:///temporary.sqlite3'}, 'PostgreSQL'),
+            ({'APP_REGISTRATION_MODE': 'open'}, 'APP_REGISTRATION_MODE')]:
+        result = subprocess.run([str(bash), 'start-render.sh'], cwd=ROOT, env={**start_env, **changes},
+                                text=True, errors='replace', capture_output=True, timeout=30)
+        assert result.returncode and message in result.stderr
+        assert 'Applying ' not in result.stdout and 'fixture-sensitive-data' not in result.stderr
+    # An accidentally inherited migrator URL is discarded. Missing web URL is
+    # still rejected, without ever invoking the migration script.
+    assert 'migrate_schema' not in (ROOT / 'start-render.sh').read_text()
+    assert 'unset APP_USE_DIRECT_DATABASE DATABASE_URL_UNPOOLED' in (ROOT / 'start-render.sh').read_text()
+    checks.append('startup_rejects_missing_or_sqlite_urls_and_open_signup_without_migrations')
     result = {'checks': checks, 'checks_passed': len(checks), 'production_database_contacted': False,
               'external_resources_created': False, 'linux_gunicorn_executed': False,
               'render_actual_suspend_tested': False, 'https_transport_simulated_only': True,

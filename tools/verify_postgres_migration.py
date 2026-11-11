@@ -16,12 +16,12 @@ import secrets
 import subprocess
 import sys
 import uuid
-from urllib.parse import unquote, urlsplit, urlunsplit
+from urllib.parse import unquote, urlsplit
 from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from tools.postgres_common import binary, direct_url, load_env_file, management_error
+from tools.postgres_common import binary, direct_url, load_env_file, management_error, require_local_test_database
 
 
 def stable(value):
@@ -36,10 +36,10 @@ def worker_environment(base, url=None, source=None):
     env = dict(base, APP_LOCAL_MODE='true', APP_ENVIRONMENT='local', APP_DEBUG='false',
                APP_ALLOWED_HOSTS='localhost,127.0.0.1,testserver', APP_REGISTRATION_MODE='open')
     if url:
-        env.update(DATABASE_URL=url, DATABASE_URL_UNPOOLED=url)
+        env.update(DATABASE_URL=url, DATABASE_URL_UNPOOLED=url, APP_DB_PATH='')
     else:
-        env.pop('DATABASE_URL', None)
-        env.pop('DATABASE_URL_UNPOOLED', None)
+        # Override both inherited values and optional local .env defaults.
+        env.update(DATABASE_URL='', DATABASE_URL_UNPOOLED='')
     if source:
         env['APP_DB_PATH'] = str(source)
     return env
@@ -55,7 +55,7 @@ def child_call(arguments, env, *, expected=0):
     return json.loads(lines[-1]) if lines else {}
 
 
-def fixture(path, directory):
+def fixture(path, directory, legacy=False):
     import django
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
     django.setup()
@@ -67,7 +67,13 @@ def fixture(path, directory):
     from django.test import Client
     from django.utils import timezone
     from finance.domain import add_months
-    call_command('migrate', verbosity=0, stdout=StringIO())
+    if legacy:
+        from django.db import connection
+        for target in [('auth',), ('sessions',), ('finance', '0002')]:
+            call_command('migrate', *target, verbosity=0, stdout=StringIO())
+        assert 'finance_useraccessevent' not in connection.introspection.table_names()
+    else:
+        call_command('migrate', verbosity=0, stdout=StringIO())
     User = get_user_model()
     password = os.environ['ORGANIZA_TEST_PASSWORD']
     admin = User.objects.create_user(username='migration_fictitious_admin', password=password, is_staff=True, is_superuser=True)
@@ -134,7 +140,7 @@ def fixture(path, directory):
         Access = apps.get_model('finance', 'UserAccessEvent')
     except LookupError:
         Access = None
-    if Access:
+    if Access and not legacy:
         Access.objects.create(actor=admin, subject=reader, before_active=False, after_active=True)
     # Exercise real password login, preserving its session and throttle records.
     client = Client()
@@ -216,9 +222,17 @@ def read_pg(directory, exercise=False):
 def worker(args):
     source = Path(args.source).resolve() if args.source else None
     directory = Path(args.directory).resolve()
+    if not directory.is_relative_to(ROOT / 'test-results'):
+        raise RuntimeError('A pasta do ensaio deve estar em test-results.')
     if args.worker == 'prepare':
-        fixture(source, directory)
-    elif args.worker == 'schema':
+        if (not source or source.parent != directory or source.exists()
+                or source != Path(os.environ['APP_DB_PATH']).resolve()
+                or os.environ.get('DATABASE_URL') or os.environ.get('DATABASE_URL_UNPOOLED')):
+            raise RuntimeError('A preparação exige um novo SQLite fictício, isolado do PostgreSQL.')
+        fixture(source, directory, legacy=args.legacy_source)
+        return
+    require_local_test_database()
+    if args.worker == 'schema':
         from tools.postgres_common import prepare_django
         prepare_django()
         from django.core.management import call_command
@@ -243,7 +257,12 @@ def worker(args):
                 raise RuntimeError('Injected failure did not occur')
         else:
             metadata = json.loads((directory / 'fixture-private.json').read_text())
-            print(json.dumps(migrate(source, as_of=metadata['as_of'])))
+            result = subprocess.run([sys.executable, str(ROOT / 'tools/migrate_sqlite_postgres.py'),
+                                     '--source', str(source), '--source-frozen', '--as-of', metadata['as_of']],
+                                    cwd=ROOT, capture_output=True, text=True, timeout=90)
+            if result.returncode:
+                raise RuntimeError('O importador recusou a fixture ou o destino do ensaio.')
+            print(result.stdout.strip())
     elif args.worker == 'exercise':
         read_pg(directory, exercise=True)
     elif args.worker == 'read':
@@ -284,14 +303,27 @@ def main(args):
     directory.mkdir(parents=True)
     source = directory / 'source-fictitious.sqlite3'
     names = {kind: f'organiza_test_{tag}_{kind}' for kind in ('import', 'fail', 'restore')}
-    urls = {kind: urlunsplit((parsed.scheme, parsed.netloc, '/' + name, parsed.query, '')) for kind, name in names.items()}
+    if parsed.username != 'organiza_test_admin':
+        raise RuntimeError('O ensaio de roles exige o administrador do cluster fictício.')
+    manager = 'organiza_test_migrator_' + tag
+    manager_password = secrets.token_urlsafe(32)
+    urls = {}
     with psycopg.connect(original_url, autocommit=True, connect_timeout=10) as admin:
-        for name in names.values():
+        admin.execute(sql.SQL('CREATE ROLE {} LOGIN PASSWORD {}').format(sql.Identifier(manager), sql.Literal(manager_password)))
+        for kind, name in names.items():
             assert name.startswith('organiza_test_' + tag)
             admin.execute(sql.SQL('CREATE DATABASE {}').format(sql.Identifier(name)))
+            target = parsed._replace(path='/' + name)
+            with psycopg.connect(target.geturl()) as bootstrap:
+                bootstrap.execute('REVOKE CREATE ON SCHEMA public FROM PUBLIC')
+                bootstrap.execute(sql.SQL('GRANT CREATE, USAGE ON SCHEMA public TO {}').format(sql.Identifier(manager)))
+            urls[kind] = target._replace(netloc=f'{manager}:{manager_password}@' + parsed.netloc.rsplit('@', 1)[-1]).geturl()
     common = dict(os.environ, APP_SECRET_KEY=secrets.token_urlsafe(64), ORGANIZA_TEST_PASSWORD=secrets.token_urlsafe(30))
     local_env = worker_environment(common, source=source)
-    source_result = child_call(['--worker', 'prepare', '--source', str(source), '--directory', str(directory)], local_env)
+    prepare_args = ['--worker', 'prepare', '--source', str(source), '--directory', str(directory)]
+    if args.legacy_source:
+        prepare_args.append('--legacy-source')
+    child_call(prepare_args, local_env)
     source_hash = hashlib.sha256(source.read_bytes()).hexdigest()
     envs = {kind: worker_environment(common, url=url) for kind, url in urls.items()}
     for kind in ('import', 'fail'):
@@ -365,13 +397,17 @@ def main(args):
                 'restore_into_nonempty_refused': restore_nonempty_refused, 'source_sqlite_unchanged': True,
                 'fictitious_data_only': True, 'official_database_accessed': False, 'external_resources_created': False,
                 'local_databases_retained_for_inspection': list(names.values())}
-    (ROOT / 'test-results' / 'postgres-migration-evidence.json').write_text(json.dumps(evidence, indent=2), encoding='utf-8')
+    evidence['source_finance_migration'] = '0002' if args.legacy_source else '0005'
+    evidence['dedicated_migrator_not_database_owner'] = True
+    filename = 'postgres-legacy-migration-evidence.json' if args.legacy_source else 'postgres-migration-evidence.json'
+    (ROOT / 'test-results' / filename).write_text(json.dumps(evidence, indent=2), encoding='utf-8')
     print(json.dumps(evidence, indent=2))
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--env-file')
+    parser.add_argument('--legacy-source', action='store_true', help='Cria a fixture SQLite no esquema financeiro 0002 da V0.1.3.')
     parser.add_argument('--worker', choices=['prepare', 'schema', 'import', 'failure', 'exercise', 'read'])
     parser.add_argument('--source')
     parser.add_argument('--directory')

@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import shutil
 import tempfile
-from urllib.parse import parse_qs, unquote, urlsplit
+from urllib.parse import parse_qs, unquote, urlencode, urlsplit
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -45,13 +45,29 @@ def direct_url():
         raise RuntimeError('A conexão de gestão deve ser PostgreSQL com banco explícito.')
     if '-pooler' in parsed.hostname:
         raise RuntimeError('Migração e backup exigem conexão direta, sem -pooler.')
-    mode = parse_qs(parsed.query).get('sslmode', ['require'])[0]
-    if parsed.hostname not in ('127.0.0.1', 'localhost', '::1') and mode in ('disable', 'allow', 'prefer'):
-        raise RuntimeError('A conexão PostgreSQL remota exige TLS; não usar sslmode disable, allow ou prefer.')
+    query = parse_qs(parsed.query, keep_blank_values=True)
+    if query.keys() - {'sslmode', 'sslrootcert', 'channel_binding', 'connect_timeout', 'application_name'} or any(len(values) != 1 for values in query.values()):
+        raise RuntimeError('A URL direta contém opções de conexão inesperadas ou repetidas. Confira o destino no ambiente seguro.')
     for part in (parsed.hostname, unquote(parsed.username or ''), unquote(parsed.password or ''), unquote(parsed.path[1:])):
         if '\n' in part or '\r' in part:
             raise RuntimeError('A configuração da conexão contém caracteres inválidos.')
-    return value
+    if parsed.hostname in ('127.0.0.1', 'localhost', '::1'):
+        return value
+    if not os.getenv('DATABASE_URL_UNPOOLED'):
+        raise RuntimeError('Defina DATABASE_URL_UNPOOLED explícita para manutenção remota.')
+    if query.get('sslmode', ['verify-full'])[0] not in {'require', 'verify-ca', 'verify-full'}:
+        raise RuntimeError('A conexão PostgreSQL remota exige TLS com verificação do servidor.')
+    import certifi
+    query['sslmode'] = ['verify-full']
+    query['sslrootcert'] = [os.getenv('APP_DATABASE_SSLROOTCERT') or query.get('sslrootcert', [certifi.where()])[0]]
+    return parsed._replace(query=urlencode(query, doseq=True)).geturl()
+
+
+def require_local_test_database():
+    parsed = urlsplit(direct_url())
+    if (parsed.hostname not in ('127.0.0.1', 'localhost', '::1')
+            or not unquote(parsed.path[1:]).startswith('organiza_test_')):
+        raise RuntimeError('Um ensaio exige destino PostgreSQL local com nome organiza_test_.')
 
 
 def binary(name):

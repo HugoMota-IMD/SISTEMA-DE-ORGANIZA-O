@@ -1,0 +1,26 @@
+# Source-only allowlist for the disposable pilot lab. No data, backups or .env.
+**
+!manage.py
+!requirements.txt
+!requirements-dev.txt
+!gunicorn.conf.py
+!render.yaml
+!build.sh
+!start-render.sh
+!config/
+!config/*.py
+!finance/
+!finance/*.py
+!finance/migrations/
+!finance/migrations/*.py
+!tools/
+!tools/*.py
+!static/
+!static/*.js
+!static/*.css
+!static/*.svg
+!static/*.webmanifest
+!templates/
+!templates/*.html
+!deploy/
+!deploy/pilot-lab.Dockerfile

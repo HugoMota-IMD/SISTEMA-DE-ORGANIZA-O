@@ -8,16 +8,25 @@ def database_configuration(base_dir, hosted):
     raw = os.getenv('DATABASE_URL', '').strip()
     direct = os.getenv('APP_USE_DIRECT_DATABASE', 'false').lower() == 'true'
     if direct:
-        raw = os.getenv('DATABASE_URL_UNPOOLED', '').strip() or raw
-        if raw and '-pooler' in (urlsplit(raw).hostname or ''):
-            raise RuntimeError('Use DATABASE_URL_UNPOOLED direta para migrações e manutenção.')
+        unpooled = os.getenv('DATABASE_URL_UNPOOLED', '').strip()
+        if hosted and not unpooled:
+            raise RuntimeError('Defina DATABASE_URL_UNPOOLED direta para migrações e manutenção.')
+        raw = unpooled or raw
     if raw:
+        if os.getenv('APP_DB_PATH', '').strip():
+            raise RuntimeError('APP_DB_PATH identifica SQLite. Separe esse ambiente das conexões PostgreSQL antes de iniciar.')
         try:
             parsed = urlsplit(raw)
             if parsed.scheme not in {'postgres', 'postgresql'} or not parsed.hostname or not parsed.path.strip('/'):
                 raise ValueError('invalid PostgreSQL URL')
-            if hosted and parse_qs(parsed.query).get('sslmode', ['require'])[-1] in {'disable', 'allow', 'prefer'}:
-                raise ValueError('TLS required')
+            if direct and '-pooler' in parsed.hostname:
+                raise RuntimeError('Use DATABASE_URL_UNPOOLED direta para migrações e manutenção.')
+            if hosted:
+                query = parse_qs(parsed.query, keep_blank_values=True)
+                if (query.get('sslmode', ['require'])[0] not in {'require', 'verify-ca', 'verify-full'}
+                        or any(len(values) != 1 for values in query.values())
+                        or query.keys() - {'sslmode', 'sslrootcert', 'channel_binding', 'connect_timeout', 'application_name'}):
+                    raise ValueError('Unexpected hosted connection options')
             import dj_database_url
             config = dj_database_url.parse(raw, conn_max_age=0, conn_health_checks=True)
         except (ValueError, TypeError, KeyError):

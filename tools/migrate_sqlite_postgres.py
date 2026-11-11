@@ -18,7 +18,7 @@ import uuid
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from tools.postgres_common import load_env_file, management_error, prepare_django
+from tools.postgres_common import load_env_file, management_error, prepare_django, require_local_test_database
 
 RECEIPT_TABLE = 'organiza_import_receipt'
 STANDARD = ['auth_group', 'auth_user', 'auth_group_permissions', 'auth_user_groups',
@@ -205,6 +205,8 @@ def migrate(path, *, as_of=None, after_table=None):
                 return {'result': 'already_imported', 'source_digest': fingerprint, 'duplicate_prevented': True}
             cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema=current_schema() AND (table_name LIKE 'finance_%%' OR table_name LIKE 'auth_%%' OR table_name='django_session')")
             business = sorted(row[0] for row in cursor.fetchall() if row[0] != 'auth_permission')
+            if set(source) - set(business) - {'auth_permission', 'django_content_type'}:
+                raise RuntimeError('Há tabelas da origem sem correspondência no destino. Verifique as migrações antes do corte.')
             schemas = {}
             for table in business:
                 cursor.execute(sql.SQL('SELECT COUNT(*) FROM {}').format(quote(table)))
@@ -271,6 +273,7 @@ def main():
                 fictitious = False
             if not fictitious:
                 raise RuntimeError('Importação real exige aprovação final e --approved-real-import. O padrão aceita somente fixture marcada pelo ensaio fictício.')
+            require_local_test_database()
         print(json.dumps(migrate(path, as_of=args.as_of), ensure_ascii=True))
         return 0
     except Exception as error:

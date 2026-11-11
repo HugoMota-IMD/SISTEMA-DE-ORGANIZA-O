@@ -31,7 +31,6 @@ jobs:
       NEON_DIRECT_HOST: ${{ vars.NEON_DIRECT_HOST }}
       NEON_DATABASE_NAME: ${{ vars.NEON_DATABASE_NAME }}
       NEON_SERVER_MAJOR: ${{ vars.NEON_SERVER_MAJOR }}
-      PG_BIN_DIR: /usr/lib/postgresql/18/bin
       PYTHONUNBUFFERED: '1'
 
     steps:
@@ -64,8 +63,10 @@ jobs:
             'Signed-By: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc' \
             | sudo tee /etc/apt/sources.list.d/organiza-pgdg.sources >/dev/null
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends postgresql-client-18 age rclone
-          python -m pip install --disable-pip-version-check 'psycopg[binary]==3.3.6'
+          [[ "$NEON_SERVER_MAJOR" =~ ^[1-9][0-9]$ ]] || exit 1
+          sudo apt-get install -y --no-install-recommends "postgresql-client-$NEON_SERVER_MAJOR" age rclone
+          printf 'PG_BIN_DIR=/usr/lib/postgresql/%s/bin\n' "$NEON_SERVER_MAJOR" >> "$GITHUB_ENV"
+          python -m pip install --disable-pip-version-check 'psycopg[binary]==3.3.6' 'certifi==2026.10.23'
 
       - name: Validate destinations and write only a temporary OAuth config
         env:
@@ -77,7 +78,7 @@ jobs:
           from pathlib import Path
           from tools.postgres_common import direct_url
           try:
-              if os.environ.get('DRIVE_ACCOUNT_EMAIL', '').lower() != 'operator@example.invalid':
+              if os.environ.get('DRIVE_ACCOUNT_EMAIL', '').lower() != 'imd.hugo@dasemper.com':
                   raise ValueError('unapproved Drive account')
               folder = os.environ.get('DRIVE_BACKUP_FOLDER_ID', '')
               if not re.fullmatch(r'[A-Za-z0-9_-]{10,128}', folder):
@@ -93,9 +94,7 @@ jobs:
               import psycopg
               with psycopg.connect(direct_url(), connect_timeout=10) as database:
                   version = int(database.execute('SHOW server_version_num').fetchone()[0]) // 10000
-              # This template pins client 18. Confirm the server first; if it is
-              # 17, change both the client pin and this check, then repeat restore.
-              if str(version) != os.environ.get('NEON_SERVER_MAJOR') or version != 18:
+              if str(version) != os.environ.get('NEON_SERVER_MAJOR'):
                   raise ValueError('align client/server major and repeat restore rehearsal')
               config = configparser.ConfigParser(interpolation=None)
               config.read_string(os.environ.get('RCLONE_CONFIG_CONTENTS', ''))
@@ -130,7 +129,7 @@ jobs:
                   headers={'Authorization': 'Bearer ' + access})
               with urllib.request.urlopen(about_request, timeout=20) as response:
                   profile = json.load(response)
-              if profile.get('user', {}).get('emailAddress', '').lower() != 'operator@example.invalid':
+              if profile.get('user', {}).get('emailAddress', '').lower() != 'imd.hugo@dasemper.com':
                   raise ValueError('OAuth identity differs from approved account')
               destination = drive_get('files/' + folder, 'id,mimeType,trashed,capabilities(canAddChildren)')
               if (destination.get('id') != folder or destination.get('mimeType') != 'application/vnd.google-apps.folder'

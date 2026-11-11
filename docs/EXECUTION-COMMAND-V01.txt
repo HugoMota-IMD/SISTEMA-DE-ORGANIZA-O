@@ -1,0 +1,385 @@
+COMANDO DE EXECUÇÃO — SISTEMA DE ORGANIZAÇÃO FINANCEIRA — V01
+
+Você atuará no projeto CODEX — ORGANIZAÇÃO FINANCEIRA como responsável pelo levantamento técnico, arquitetura, implementação, testes e preparação da entrega de um aplicativo de finanças pessoais, para uso individual, em casal ou em família.
+
+Conduza o projeto do zero até uma versão utilizável, por etapas verificáveis. Este comando autoriza iniciar o diagnóstico, documentar a solução e construir a primeira versão funcional no projeto correspondente, preservando materiais existentes.
+
+1. CONTEXTO E GOVERNANÇA
+
+Projeto: 04 — SISTEMA DE ORGANIZAÇÃO FINANCEIRA.
+Responsável pelas decisões: Hugo Erazo.
+
+Pasta de trabalho prevista:
+C:\Users\USER\Documents\01.Setor Desenvolvimento\01_DESENVOLVIMENTO_LOCAL\SISTEMA-ORGANIZACAO-FINANCEIRA
+
+Pasta oficial de documentação:
+https://drive.google.com/drive/folders/1V5JDiEFdb3THznzLZxAPSZ6zOt6Imims
+
+Guia de integração:
+https://docs.google.com/document/d/1y5BMYTSOhfFXxeuA0nOhZ4r2cKCWEHZKGT-oZAqqBFQ/edit
+
+A conta autorizada do Drive é imd.hugo@dasemper.com. Antes de escrever no Drive, confirme com Hugo a conta e o destino, conforme a regra permanente do projeto.
+
+O COMANDO MESTRE concentra requisitos, decisões, prioridades e aprovações. O Codex executa, verifica e devolve um relatório para registro nesse chat.
+
+Não misture este projeto com SEMPER BI, Loja Dom ou Sistema de Óticas.
+
+Antes de modificar:
+- Confira o diretório efetivo, arquivos existentes, instruções locais e estado do Git.
+- Preserve alterações em andamento e materiais originais.
+- Não recrie um projeto que já exista.
+- Não suponha acesso à pasta Windows se estiver em outro ambiente.
+- Se os arquivos não estiverem disponíveis, informe a limitação e prepare o diagnóstico e o plano sem inventar inspeções.
+
+O Git local foi iniciado, mas não há remoto confirmado. Não crie remoto, envie código ou publique serviços sem aprovação. Prepare a sincronização em repositório privado para que a entrega oficial não dependa de uma única máquina.
+
+2. OBJETIVO DO PRODUTO
+
+Criar um aplicativo simples de usar que responda:
+
+- Quanto dinheiro tenho hoje?
+- Quanto tenho para receber?
+- Quais contas vencem nos próximos dias?
+- Quanto preciso pagar em cada mês?
+- Qual dívida está em qual cartão?
+- Quantas parcelas faltam e quando cada dívida termina?
+- Quanto meu compromisso mensal diminuirá quando determinadas parcelas acabarem?
+- Qual será meu saldo projetado considerando receitas e pagamentos previstos?
+- Quanto gastei por categoria, estabelecimento, pessoa e forma de pagamento?
+
+O aplicativo deve funcionar bem no celular e no computador, com persistência e acesso autenticado entre dispositivos.
+
+3. USUÁRIOS E ESPAÇOS FINANCEIROS
+
+Permitir:
+- Uso individual.
+- Uso por duas pessoas.
+- Uso familiar com vários participantes.
+
+Cada pessoa deve possuir seu próprio acesso. Não exigir compartilhamento de senha.
+
+Organizar os dados por espaço financeiro. Uma pessoa pode participar de mais de um espaço, por exemplo: “Pessoal” e “Família”.
+
+Perfis iniciais:
+- Administrador: configura o espaço, gerencia participantes e dados.
+- Colaborador: registra e consulta movimentações permitidas.
+- Leitor: consulta informações permitidas.
+
+Na primeira versão, todos os membros autorizados de um espaço compartilham a visão desse espaço. Dados pessoais privados devem ficar em outro espaço, sem acesso implícito pelos familiares.
+
+Aplicar as permissões no servidor e no banco de dados, além da interface.
+
+Registrar separadamente quem lançou, quem pagou e a quem o gasto pertence. Divisão automática de despesas e acerto de valores entre pessoas podem ficar para uma evolução posterior.
+
+4. CONTAS, RECEITAS E SALDOS
+
+Cadastrar contas bancárias, carteiras e dinheiro em espécie:
+- Nome e instituição.
+- Titular ou responsável.
+- Saldo inicial com data de referência.
+- Status ativo ou arquivado.
+
+Registrar receitas:
+- Descrição, valor, categoria e pessoa.
+- Conta de destino.
+- Data prevista e data efetiva.
+- Situação prevista, recebida ou cancelada.
+- Recorrência opcional.
+
+Diferenciar:
+- Saldo realizado: movimentações efetivamente confirmadas.
+- Receitas previstas.
+- Pagamentos previstos.
+- Saldo projetado.
+
+Limite de cartão não é saldo disponível em dinheiro. Receitas previstas não devem aparecer como dinheiro já recebido.
+
+Transferências entre contas próprias não são receitas nem despesas.
+
+5. DESPESAS E CLASSIFICAÇÃO
+
+Permitir despesas:
+- À vista.
+- Parceladas.
+- Recorrentes, com ou sem término definido.
+- Pagas ou pendentes.
+
+Campos:
+- Descrição.
+- Estabelecimento ou favorecido.
+- Categoria e subcategoria.
+- Valor.
+- Data da compra, competência, vencimento e pagamento, quando aplicável.
+- Forma de pagamento.
+- Conta ou cartão.
+- Responsável pelo gasto.
+- Observações e etiquetas opcionais.
+
+Separar claramente:
+- Categoria: com o que foi gasto.
+- Estabelecimento: onde ou para quem foi pago.
+- Forma de pagamento: como foi pago.
+- Pessoa: de quem foi o gasto.
+- Canal opcional: presencial ou online.
+
+Exemplo:
+R$ 100 no iFood e R$ 185 no Crepes e Crepes devem totalizar R$ 285 em “Alimentação”, mesmo que tenham formas de pagamento diferentes.
+
+Categorias iniciais editáveis:
+Alimentação, Moradia, Transporte, Saúde, Educação, Lazer, Compras, Assinaturas, Serviços, Impostos e taxas, Outros.
+
+Permitir subcategorias como Alimentação > Delivery e Alimentação > Restaurantes.
+
+6. PIX E OUTROS PAGAMENTOS
+
+Oferecer acesso rápido ou filtro específico para Pix, usando o mesmo cadastro de movimentações, sem criar registros duplicados.
+
+Permitir:
+- Despesa por Pix.
+- Receita por Pix.
+- Transferência por Pix entre contas próprias.
+
+Registrar conta de origem ou destino, valor, favorecido, categoria e data conforme a operação.
+
+Pix é forma de movimentação, não categoria de gasto. “Alimentação” pode conter Pix, crédito, débito e dinheiro.
+
+7. CARTÕES E FATURAS
+
+Permitir vários cartões, identificados por:
+- Apelido.
+- Instituição.
+- Titular.
+- Últimos quatro dígitos opcionais.
+- Limite informado.
+- Dia de fechamento.
+- Dia de vencimento.
+- Conta normalmente usada para pagamento.
+
+Não armazenar número completo, CVV ou senha de cartão.
+
+Cada compra deve identificar o cartão utilizado e se foi à vista ou parcelada.
+
+Mostrar por cartão:
+- Fatura atual.
+- Próximas faturas.
+- Compras e parcelas incluídas.
+- Total futuro comprometido.
+- Limite estimado, com regra documentada.
+- Vencimentos e situação dos pagamentos.
+
+Datas de fechamento e vencimento devem aceitar ajustes por fatura. Compras próximas ao fechamento precisam permitir correção da fatura atribuída, pois o processamento pode variar.
+
+O pagamento da fatura movimenta dinheiro da conta e liquida obrigações do cartão. Não deve contar novamente como despesa de consumo: a compra já foi classificada na sua categoria.
+
+Permitir pagamento parcial e registrar o saldo pendente. Não calcular juros bancários automaticamente sem regra contratual informada; permitir lançar os encargos efetivamente informados.
+
+8. PARCELAMENTOS E DÍVIDAS
+
+Ao cadastrar uma compra parcelada, informar:
+- Descrição e estabelecimento.
+- Categoria.
+- Pessoa responsável.
+- Cartão ou outra modalidade de dívida.
+- Valor total.
+- Número de parcelas.
+- Primeiro vencimento ou primeira fatura.
+- Parcelas já pagas, quando a dívida começou antes do uso do aplicativo.
+
+Gerar parcelas vinculadas à compra original.
+
+Exibir:
+- Parcela atual e total, por exemplo 3/10.
+- Valor de cada parcela.
+- Parcelas pagas e restantes.
+- Total original.
+- Saldo devedor.
+- Próximo vencimento.
+- Último vencimento previsto.
+- Valor mensal liberado após a última parcela.
+
+Distinguir obrigatoriamente:
+A. Saldo devedor total: obrigações ainda não liquidadas.
+B. Compromisso mensal: parcelas previstas para determinado mês.
+C. Fluxo de caixa: entradas e saídas de dinheiro por data.
+
+Uma data de vencimento passar não significa que houve pagamento.
+Uma dívida atrasada continua pendente.
+O fim previsto das parcelas não pode marcar automaticamente a dívida como quitada.
+
+Permitir confirmar quitação, antecipar parcelas e registrar descontos ou encargos de forma rastreável. Se a antecipação completa não couber na primeira entrega, documentar e implementar em etapa posterior sem comprometer o modelo de dados.
+
+9. PROJEÇÃO FINANCEIRA — FUNÇÃO CENTRAL
+
+Criar uma tela “Futuro financeiro” com:
+- Visão mensal de pelo menos 12 meses, extensível.
+- Receitas previstas.
+- Contas recorrentes.
+- Parcelas e faturas previstas.
+- Compromisso total do mês.
+- Saldo projetado.
+- Dívidas que terminam em cada mês.
+- Redução prevista das parcelas entre meses.
+
+Exemplo de compromisso mensal:
+Outubro: R$ 1.000.
+Uma dívida com parcela mensal de R$ 150 tem sua última parcela em outubro.
+Novembro: R$ 850, mantendo os demais compromissos constantes.
+
+Exemplo de saldo devedor:
+Saldo pendente de R$ 1.000.
+Pagamento confirmado de R$ 150.
+Novo saldo pendente: R$ 850.
+
+Não confundir esses dois exemplos.
+
+Permitir uma simulação de nova compra parcelada, sem registrá-la como dívida real:
+“Se eu comprar R$ 1.200 em 6 parcelas, como ficam os próximos meses?”
+
+As projeções devem declarar suas premissas: incluem lançamentos conhecidos e recorrências configuradas, sem presumir ausência de novos gastos. Não prometer uma data para “ficar sem dívidas” quando houver obrigações sem prazo ou valores desconhecidos.
+
+10. TELAS PRINCIPAIS
+
+- Início: saldos, vencimentos, compromissos e atalhos.
+- Movimentações: receitas, despesas e transferências.
+- A pagar e a receber: vencimentos e confirmação.
+- Cartões: faturas e compras por cartão.
+- Parcelamentos e dívidas: saldo, progresso e término.
+- Futuro financeiro: projeção e simulação.
+- Categorias e estabelecimentos.
+- Relatórios e orçamento.
+- Configurações e participantes.
+
+Evitar excesso de telas ou etapas para registrar um gasto.
+
+11. RELATÓRIOS E ALERTAS
+
+Relatórios:
+- Gastos por categoria e subcategoria.
+- Gastos por estabelecimento.
+- Gastos por pessoa e cartão.
+- Receitas versus despesas.
+- Previsto versus realizado.
+- Evolução das parcelas e compromissos.
+- Orçamento mensal por categoria.
+
+Permitir filtros por período e espaço financeiro.
+
+Os relatórios devem informar a base usada: compra/competência ou pagamento/caixa. Não misturar bases silenciosamente.
+
+Alertas internos na primeira versão:
+- Contas próximas do vencimento.
+- Contas vencidas.
+- Faturas a vencer.
+- Última parcela próxima.
+- Orçamento de categoria atingido.
+- Saldo projetado negativo.
+
+Notificações externas e push ficam para etapa própria, com consentimento e verificação de suporte. Não apresentar notificações simuladas como serviço ativo.
+
+12. REGRAS TÉCNICAS E INTEGRIDADE
+
+- Valores monetários em centavos inteiros ou decimal exato.
+- Não usar ponto flutuante para cálculos financeiros.
+- Divisão de parcelas deve preservar o total exato.
+- Datas sem horário devem ser tratadas como datas financeiras.
+- Tratar meses com 28, 29, 30 e 31 dias.
+- Definir e documentar regra para vencimento em dia inexistente.
+- Separar estado previsto de confirmação real.
+- Evitar duplicação ao repetir uma operação ou reenviar uma requisição.
+- Pagamentos, estornos e cancelamentos devem deixar histórico.
+- Alterar recorrências deve permitir distinguir uma ocorrência das futuras.
+- Não alterar silenciosamente lançamentos já liquidados.
+- Registrar autoria e datas das alterações relevantes.
+- Não permitir acesso entre espaços sem autorização.
+
+O saldo devedor consolidado não pode somar a compra original, suas parcelas e a fatura como três dívidas distintas. Definir uma representação única das obrigações e seus pagamentos.
+
+13. DIREÇÃO TÉCNICA PROPOSTA
+
+Avaliar uma aplicação web responsiva com instalação como PWA, priorizando baixo custo e uso entre dispositivos.
+
+A instalação PWA não significa suporte offline completo. Não prometer edição offline sem estratégia de sincronização e resolução de conflitos.
+
+Primeiro inspecione o que existe. Caso o projeto esteja vazio, proponha uma arquitetura enxuta e justificável com:
+- Interface.
+- Backend.
+- Banco de dados.
+- Autenticação.
+- Isolamento por espaço financeiro.
+- Testes.
+- Backup e restauração.
+- Hospedagem e custos recorrentes estimados.
+
+Use versões suportadas verificadas na documentação oficial. Evite serviços pagos ou infraestrutura desnecessária.
+
+Dados reais precisam de persistência em servidor para sincronização. Armazenamento apenas no navegador pode servir para demonstração identificada, nunca como entrega final.
+
+Não usar dados financeiros reais em testes, repositórios ou demonstrações.
+Não incluir segredos no código, Drive ou histórico Git.
+Preparar configuração por variáveis de ambiente e exemplo sem credenciais.
+
+Integração bancária/Open Finance, aplicativos nativos, investimentos, contabilidade empresarial e automações por WhatsApp ficam fora da primeira versão. Documentar como possibilidades futuras.
+
+14. PLANO DE EXECUÇÃO
+
+Etapa 1 — Diagnóstico e especificação
+- Inspecionar projeto e Git.
+- Consolidar requisitos deste comando.
+- Registrar premissas e dúvidas realmente bloqueantes.
+- Criar backlog priorizado e critérios de aceite.
+- Documentar modelo financeiro e arquitetura proposta.
+- Registrar decisões antes de implementar.
+
+Etapa 2 — Primeira versão funcional
+Entregar um fluxo completo:
+criar espaço → cadastrar conta e cartão → lançar receita → lançar despesa Pix → registrar compra parcelada → consultar faturas → confirmar pagamento → visualizar projeção atualizada.
+
+Incluir desde essa etapa autenticação, persistência e isolamento de espaços para uso com dados reais. Uma demonstração sem infraestrutura deve ser claramente identificada e usar apenas dados fictícios.
+
+Etapa 3 — Colaboração e planejamento
+Completar participantes, permissões, orçamentos, relatórios, alertas internos e simulação.
+
+Etapa 4 — Homologação
+Executar testes técnicos e roteiro prático de uso individual e familiar, corrigindo falhas antes de considerar a versão pronta.
+
+Etapa 5 — Entrega
+Preparar versão, manual, limitações conhecidas, backup/restauração testados, instruções de manutenção e publicação.
+Publicar apenas após aprovação do destino e das condições de hospedagem.
+A versão oficial deve ter código em Git privado aprovado e documentação no destino oficial confirmado.
+
+Avance nas atividades locais e reversíveis autorizadas. Não pare apenas em um plano quando houver condições para implementar. Quando depender de credenciais ou aprovação de serviço externo, conclua os preparativos e informe o bloqueio concreto.
+
+15. TESTES OBRIGATÓRIOS
+
+Comprovar pelo menos:
+- iFood R$ 100 + Crepes e Crepes R$ 185 = R$ 285 em Alimentação.
+- Compra de R$ 1.000 em 3 parcelas soma exatamente R$ 1.000.
+- Última parcela de R$ 150 em outubro reduz o compromisso de novembro de R$ 1.000 para R$ 850, sem outros movimentos.
+- Vencimento ultrapassado não marca pagamento.
+- Pagamento de fatura não duplica despesas.
+- Pagamento parcial mantém saldo correto.
+- Transferência própria não aumenta receitas nem despesas.
+- Parcelas de cartões diferentes permanecem corretamente vinculadas.
+- Dívida anterior pode ser cadastrada com parcelas já pagas sem criar saídas históricas fictícias.
+- Estorno, cancelamento e antecipação preservam valores e histórico.
+- Fechamento de cartão e virada de mês/ano funcionam.
+- Um usuário não acessa outro espaço financeiro sem permissão.
+- Projeção e saldos persistem ao acessar em outro dispositivo.
+- Backup pode ser restaurado em ambiente de teste.
+
+16. RELATÓRIO AO COMANDO MESTRE
+
+Ao terminar cada etapa, devolver um texto pronto para colar no COMANDO MESTRE contendo:
+- Etapa e versão.
+- O que foi realizado.
+- Arquivos criados ou alterados.
+- Decisões e justificativas.
+- Testes executados e resultados.
+- Pendências e limitações.
+- Situação do Git e sincronização.
+- Próxima ação recomendada.
+- Aprovações necessárias, quando houver.
+
+Não declarar teste, sincronização, publicação ou integração como concluídos sem evidência.
+
+COMECE AGORA pelo diagnóstico do projeto e pela especificação da primeira entrega, seguindo para a implementação possível dentro deste escopo.

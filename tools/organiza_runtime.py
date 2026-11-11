@@ -250,6 +250,9 @@ def log_event(event, port):
 
 
 def start(config):
+    environment = config['environment']
+    if environment.get('DATABASE_URL') or environment.get('DATABASE_URL_UNPOOLED'):
+        raise RuntimeError('O iniciador local usa o SQLite existente. Use um terminal separado das credenciais PostgreSQL.')
     validate_database(config['database'])
     python = ROOT / '.venv' / ('Scripts/python.exe' if os.name == 'nt' else 'bin/python')
     if not python.is_file() or not (ROOT / 'serve.py').is_file():

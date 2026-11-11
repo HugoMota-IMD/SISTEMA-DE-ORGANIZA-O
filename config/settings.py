@@ -30,7 +30,10 @@ if HOSTED and (LOCAL_MODE or DEBUG):
 REGISTRATION_MODE = os.getenv('APP_REGISTRATION_MODE', 'approval' if HOSTED else 'open').lower()
 if REGISTRATION_MODE not in {'open', 'approval', 'closed'} or (HOSTED and REGISTRATION_MODE == 'open'):
     raise RuntimeError('Escolha APP_REGISTRATION_MODE approval ou closed em produção; open somente local.')
-READ_ONLY_MODE = os.getenv('APP_READ_ONLY', 'false').lower() == 'true'
+read_only = os.getenv('APP_READ_ONLY', 'true' if HOSTED else 'false').lower()
+if read_only not in {'true', 'false'}:
+    raise RuntimeError('APP_READ_ONLY deve ser true ou false.')
+READ_ONLY_MODE = read_only == 'true'
 from config.database import database_configuration
 DATABASES = database_configuration(BASE_DIR, HOSTED)
 secret_path = DATA_DIR / '.local-secret'

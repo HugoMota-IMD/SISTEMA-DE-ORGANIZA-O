@@ -1,9 +1,11 @@
 # Preparation only. Do not apply before the final account/repository approval.
-# Set the region after confirming the EXISTING Neon project's region.
+# Neon remains in Sao Paulo; the web region was selected by Hugo.
 services:
   - type: web
     name: organiza-piloto
     runtime: python
+    branch: main
+    region: virginia
     plan: free
     numInstances: 1
     autoDeployTrigger: 'off'
@@ -26,6 +28,4 @@ services:
       - key: APP_SECRET_KEY
         sync: false
       - key: DATABASE_URL
-        sync: false
-      - key: DATABASE_URL_UNPOOLED
         sync: false

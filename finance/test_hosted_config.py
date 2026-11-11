@@ -159,12 +159,21 @@ class HostedConfigurationTests(SimpleTestCase):
         result = self.probe(APP_USE_DIRECT_DATABASE='true', DATABASE_URL=pooled, DATABASE_URL_UNPOOLED=DATABASE)
         self.assertTrue(result['ok'])
 
+    def test_cutover_defaults_to_read_only_and_requires_explicit_boolean(self):
+        self.assertTrue(self.probe()['read_only'])
+        self.assertFalse(self.probe(APP_READ_ONLY='false')['read_only'])
+        self.assert_rejected(APP_READ_ONLY='treu')
+
+    def test_hosted_url_query_cannot_replace_the_database_host(self):
+        self.assert_rejected(DATABASE_URL=DATABASE + '&host=unexpected.invalid')
+        self.assert_rejected(DATABASE_URL=DATABASE + '&sslmode=prefer')
+
     def test_production_never_reads_the_local_dotenv_or_its_private_origin(self):
         result = self.probe()
         self.assertTrue(result['ok'])
         self.assertEqual(result['private_origin'], '')
         self.assertEqual(result['private_host'], '')
-        self.assertNotIn('private-host.example.invalid', result['hosts'])
+        self.assertNotIn('desktop-flde4sk.tail08d4d6.ts.net', result['hosts'])
 
     def test_hosted_cannot_accidentally_adopt_the_local_tailscale_origin(self):
         self.assert_rejected(APP_PRIVATE_HTTPS_ORIGIN='https://organiza-fictitious.tailnet.ts.net')
